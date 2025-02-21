@@ -1,0 +1,264 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>乌龟游戏 - 网页版</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+        }
+        #menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none; /* 默认隐藏 */
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
+    <div id="menu">
+        <h1 id="menuTitle">游戏结束</h1>
+        <button id="restart">重新开始</button>
+        <button id="nextLevel">进入下一关</button>
+        <button id="exit">结束</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const menu = document.getElementById('menu');
+        const menuTitle = document.getElementById('menuTitle');
+        const restartBtn = document.getElementById('restart');
+        const nextLevelBtn = document.getElementById('nextLevel');
+        const exitBtn = document.getElementById('exit');
+
+        // 游戏参数
+        const arenaSize = 600;
+        const turtleSpeed = 5;
+        const bulletSpeed = 8;
+        let obstacleSpeed = 2; // 初始障碍物速度
+        const obstacleSize = 40;
+        let level = 1;
+        let score = 0; // 分数
+
+        // 游戏状态
+        let turtle, obstacles, bullets, keys, gameOver = false, gameWon = false, obstaclesMoving = false;
+
+        // 初始化游戏
+        function initGame() {
+            turtle = {
+                x: arenaSize / 2,
+                y: arenaSize / 2,
+                size: 30,
+                dx: 0,
+                dy: 0
+            };
+
+            obstacles = [];
+            const edges = [
+                { x: obstacleSize, y: obstacleSize }, // 左上
+                { x: arenaSize - obstacleSize, y: obstacleSize }, // 右上
+                { x: obstacleSize, y: arenaSize - obstacleSize }, // 左下
+                { x: arenaSize - obstacleSize, y: arenaSize - obstacleSize }, // 右下
+                { x: arenaSize / 2, y: obstacleSize } // 上中
+            ];
+            for (let i = 0; i < 5; i++) {
+                const edge = edges[i % edges.length];
+                obstacles.push({
+                    x: edge.x,
+                    y: edge.y,
+                    dx: (Math.random() - 0.5) * obstacleSpeed,
+                    dy: (Math.random() - 0.5) * obstacleSpeed
+                });
+            }
+
+            bullets = [];
+            keys = {
+                ArrowUp: false,
+                ArrowDown: false,
+                ArrowLeft: false,
+                ArrowRight: false,
+                Shift: false
+            };
+
+            gameOver = false;
+            gameWon = false;
+            obstaclesMoving = false; // 初始障碍物静止
+            menu.style.display = 'none';
+            restartBtn.style.display = 'inline';
+            nextLevelBtn.style.display = 'none';
+        }
+
+        // 键盘事件监听
+        document.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = true;
+                obstaclesMoving = true; // 按下任何键后障碍物开始移动
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = false;
+            }
+        });
+
+        // 更新乌龟移动方向
+        function updateTurtleDirection() {
+            turtle.dx = 0;
+            turtle.dy = 0;
+            if (keys.ArrowUp) turtle.dy = -turtleSpeed;
+            if (keys.ArrowDown) turtle.dy = turtleSpeed;
+            if (keys.ArrowLeft) turtle.dx = -turtleSpeed;
+            if (keys.ArrowRight) turtle.dx = turtleSpeed;
+
+            if (keys.Shift && bullets.length < 5) {
+                bullets.push({
+                    x: turtle.x,
+                    y: turtle.y,
+                    dx: turtle.dx === 0 && turtle.dy === 0 ? 0 : (turtle.dx || 0) * bulletSpeed / turtleSpeed,
+                    dy: turtle.dx === 0 && turtle.dy === 0 ? -bulletSpeed : (turtle.dy || 0) * bulletSpeed / turtleSpeed
+                });
+                keys.Shift = false;
+            }
+        }
+
+        // 游戏主循环
+        function gameLoop() {
+            if (gameOver || gameWon) {
+                showMenu();
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 更新乌龟位置
+            updateTurtleDirection();
+            turtle.x += turtle.dx;
+            turtle.y += turtle.dy;
+            turtle.x = Math.max(turtle.size / 2, Math.min(arenaSize - turtle.size / 2, turtle.x));
+            turtle.y = Math.max(turtle.size / 2, Math.min(arenaSize - turtle.size / 2, turtle.y));
+
+            // 绘制乌龟
+            ctx.fillStyle = 'green';
+            ctx.beginPath();
+            ctx.arc(turtle.x, turtle.y, turtle.size / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(turtle.x + (turtle.dx * 0.5), turtle.y + (turtle.dy * 0.5), turtle.size / 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 更新并绘制障碍物
+            obstacles.forEach((obs) => {
+                if (obstaclesMoving) {
+                    obs.x += obs.dx;
+                    obs.y += obs.dy;
+                    if (obs.x < obstacleSize / 2 || obs.x > arenaSize - obstacleSize / 2) obs.dx = -obs.dx;
+                    if (obs.y < obstacleSize / 2 || obs.y > arenaSize - obstacleSize / 2) obs.dy = -obs.dy;
+                }
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(obs.x - obstacleSize / 2, obs.y - obstacleSize / 2, obstacleSize, obstacleSize);
+
+                // 碰撞检测（乌龟与障碍物）
+                if (Math.sqrt((turtle.x - obs.x) ** 2 + (turtle.y - obs.y) ** 2) < (turtle.size / 2 + obstacleSize / 2)) {
+                    gameOver = true;
+                }
+            });
+
+            // 更新并绘制子弹
+            bullets = bullets.filter(bullet => {
+                bullet.x += bullet.dx;
+                bullet.y += bullet.dy;
+
+                ctx.fillStyle = 'blue';
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                obstacles = obstacles.filter(obs => {
+                    if (Math.sqrt((bullet.x - obs.x) ** 2 + (bullet.y - obs.y) ** 2) < (5 + obstacleSize / 2)) {
+                        score++; // 消灭障碍物加分
+                        return false;
+                    }
+                    return true;
+                });
+
+                return bullet.x > 0 && bullet.x < arenaSize && bullet.y > 0 && bullet.y < arenaSize;
+            });
+
+            // 显示分数
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}  Level: ${level}`, arenaSize - 150, 30);
+
+            // 检查胜利条件
+            if (obstacles.length === 0) {
+                gameWon = true;
+            }
+
+            if (!gameOver && !gameWon) {
+                requestAnimationFrame(gameLoop);
+            } else {
+                showMenu();
+            }
+        }
+
+        // 显示菜单
+        function showMenu() {
+            if (gameOver) {
+                ctx.fillStyle = 'red';
+                ctx.font = '40px Arial';
+                ctx.fillText('Game Over!', arenaSize / 2 - 100, arenaSize / 2);
+                menuTitle.textContent = '游戏结束';
+                restartBtn.style.display = 'inline';
+                nextLevelBtn.style.display = 'none';
+            } else if (gameWon) {
+                ctx.fillStyle = 'green';
+                ctx.font = '40px Arial';
+                ctx.fillText('Victory!', arenaSize / 2 - 80, arenaSize / 2);
+                menuTitle.textContent = `第 ${level} 关胜利`;
+                restartBtn.style.display = 'none';
+                nextLevelBtn.style.display = 'inline';
+            }
+            menu.style.display = 'block';
+        }
+
+        // 按钮事件
+        restartBtn.addEventListener('click', () => {
+            obstacleSpeed = 2;
+            level = 1;
+            score = 0; // 重置分数
+            initGame();
+            gameLoop();
+        });
+
+        nextLevelBtn.addEventListener('click', () => {
+            level++;
+            obstacleSpeed *= 2;
+            initGame();
+            gameLoop();
+        });
+
+        exitBtn.addEventListener('click', () => {
+            window.close();
+        });
+
+        // 启动游戏
+        initGame();
+        gameLoop();
+    </script>
+</body>
+</html>
